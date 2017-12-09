@@ -182,7 +182,11 @@ endef
 # LEX
 # ---------------------------------------------------------------------------
 quiet_cmd_flex = LEX     $@
+<<<<<<< HEAD
       cmd_flex = $(LEX) -o$@ -L $<
+=======
+      cmd_flex = $(LEX) -o$@ -L -P $(LEX_PREFIX) $<
+>>>>>>> 73a4f6dbe70a (kbuild: add LEX and YACC variables)
 
 .PRECIOUS: $(obj)/%.lex.c
 $(obj)/%.lex.c: $(src)/%.l FORCE
@@ -191,7 +195,11 @@ $(obj)/%.lex.c: $(src)/%.l FORCE
 # YACC
 # ---------------------------------------------------------------------------
 quiet_cmd_bison = YACC    $@
+<<<<<<< HEAD
       cmd_bison = $(YACC) -o$@ -t -l $<
+=======
+      cmd_bison = $(YACC) -o$@ -t -l -p $(YACC_PREFIX) $<
+>>>>>>> 73a4f6dbe70a (kbuild: add LEX and YACC variables)
 
 .PRECIOUS: $(obj)/%.tab.c
 $(obj)/%.tab.c: $(src)/%.y FORCE
