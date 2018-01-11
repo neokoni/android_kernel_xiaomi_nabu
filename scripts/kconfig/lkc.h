@@ -54,9 +54,7 @@ struct kconf_id {
 };
 
 extern int yylineno;
-extern int zconfdebug;
-
-int zconfparse(void);
+extern int yydebug;
 void zconfdump(FILE *out);
 void zconf_starthelp(void);
 FILE *zconf_fopen(const char *name);

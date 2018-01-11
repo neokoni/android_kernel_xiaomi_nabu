@@ -181,9 +181,6 @@ always := dochecklxdialog
 HOSTCFLAGS_zconf.lex.o	:= -I $(srctree)/$(src)
 HOSTCFLAGS_zconf.tab.o	:= -I $(srctree)/$(src)
 
-LEX_PREFIX_zconf	:= zconf
-YACC_PREFIX_zconf	:= zconf
-
 HOSTLOADLIBES_qconf	= $(KC_QT_LIBS)
 HOSTCXXFLAGS_qconf.o	= $(KC_QT_CFLAGS)
 
