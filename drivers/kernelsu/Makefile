@@ -25,14 +25,14 @@ obj-$(CONFIG_KPM) += kpm/
 # .git is a text file while the module is imported by 'git submodule add'.
 ifeq ($(shell test -e $(srctree)/$(src)/../.git; echo $$?),0)
 $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
-KSU_GIT_VERSION := 2214
+KSU_GIT_VERSION := 2217
 # ksu_version: major * 10000 + git version + 606 for historical reasons
 $(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 606))
 $(info -- SukiSU version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 else # If there is no .git file, the default version will be passed.
 $(warning "KSU_GIT_VERSION not defined! It is better to make SukiSU a git submodule!")
-ccflags-y += -DKSU_VERSION=12820
+ccflags-y += -DKSU_VERSION=12823
 endif
 
 ifndef KSU_EXPECTED_SIZE

@@ -71,6 +71,7 @@ struct DynamicStructInfo {
 #define KERNEL_VERSION_6_1 KERNEL_VERSION(6, 1, 0)
 #define KERNEL_VERSION_5_15 KERNEL_VERSION(5, 15, 0)
 #define KERNEL_VERSION_6_12 KERNEL_VERSION(6, 12, 0)
+#define KERNEL_VERSION_4_10 KERNEL_VERSION(4, 10, 0)
 
 #include <../fs/mount.h>
 #include <linux/mount.h>
@@ -170,7 +171,9 @@ DYNAMIC_STRUCT_BEGIN(task_struct)
     DEFINE_MEMBER(task_struct, group_leader)
     DEFINE_MEMBER(task_struct, mm)
     DEFINE_MEMBER(task_struct, active_mm)
+#if LINUX_VERSION_CODE > KERNEL_VERSION_4_10
     DEFINE_MEMBER(task_struct, thread_pid)
+#endif
     DEFINE_MEMBER(task_struct, files)
     DEFINE_MEMBER(task_struct, seccomp)
 #ifdef CONFIG_THREAD_INFO_IN_TASK
@@ -179,8 +182,10 @@ DYNAMIC_STRUCT_BEGIN(task_struct)
 #ifdef CONFIG_CGROUPS
     DEFINE_MEMBER(task_struct, cgroups)
 #endif
+#if LINUX_VERSION_CODE > KERNEL_VERSION_4_10
 #ifdef CONFIG_SECURITY
     DEFINE_MEMBER(task_struct, security)
+#endif
 #endif
     DEFINE_MEMBER(task_struct, thread)
 DYNAMIC_STRUCT_END(task_struct)
@@ -210,7 +215,8 @@ int sukisu_super_find_struct(
     size_t* out_size,
     int* out_members
 ) {
-    for(size_t i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
+    size_t i;
+    for(i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
         struct DynamicStructInfo* info = dynamic_struct_infos[i];
         if(strcmp(struct_name, info->name) == 0) {
             if(out_size)
@@ -233,11 +239,13 @@ int sukisu_super_access (
     const char* member_name,
     size_t* out_offset,
     size_t* out_size
-) {
-    for(size_t i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
+) { 
+    size_t i;
+    for(i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
         struct DynamicStructInfo* info = dynamic_struct_infos[i];
         if(strcmp(struct_name, info->name) == 0) {
-            for (size_t i1 = 0; i1 < info->count; i1++) {
+            size_t i1;
+            for (i1 = 0; i1 < info->count; i1++) {
                 if (strcmp(info->members[i1].name, member_name) == 0) {
                     if(out_offset)
                         *out_offset = info->members[i].offset;
@@ -271,10 +279,12 @@ int sukisu_super_container_of(
     if(ptr == NULL) {
         return -3;
     }
-    for(size_t i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
+    size_t i;
+    for(i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
         struct DynamicStructInfo* info = dynamic_struct_infos[i];
         if(strcmp(struct_name, info->name) == 0) {
-            for (size_t i1 = 0; i1 < info->count; i1++) {
+            size_t i1;
+            for (i1 = 0; i1 < info->count; i1++) {
                 if (strcmp(info->members[i1].name, member_name) == 0) {
                     *out_ptr = (void*) DYNAMIC_CONTAINER_OF(info->members[i1].offset, ptr);
                     return 0;
