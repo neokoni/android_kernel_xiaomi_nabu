@@ -109,6 +109,15 @@ extern struct group_info init_groups;
 	}, }								\
 }
 
+#define INIT_PID_LINK(type) 					\
+{								\
+	.node = {						\
+		.next = NULL,					\
+		.pprev = NULL,					\
+	},							\
+	.pid = &init_struct_pid,				\
+}
+
 #ifdef CONFIG_AUDITSYSCALL
 #define INIT_IDS \
 	.loginuid = INVALID_UID, \
