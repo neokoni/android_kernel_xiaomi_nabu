@@ -16,27 +16,12 @@ config KSU_DEBUG
 	    Enable KernelSU debug mode.
 
 config KSU_MANUAL_HOOK
-    bool "Manual hooking GKI kernels without kprobes"
-    depends on KSU && KSU != m
-    default n
-    help
-      Using manual hooks instead of KSU KPROBES hooks.
-      By default the GKI kernel should use the KSU KPROBES hook.
-      Non-GKI kernels should prioritize the use of manual hooks.
-
-config KSU_GKI_KERNEL
-    bool
-    default y if VERSION >= 5 && PATCHLEVEL >= 10 || \
-               VERSION >= 6
-    help
-      Internal flag for GKI kernel detection.
-
-config KSU_HOOK_KPROBES
-    bool
-    depends on KSU && KPROBES && KSU_GKI_KERNEL
-    default y if !KSU_MANUAL_HOOK
-    help
-      Internal flags for hooks based on KSU kprobes.
+	bool "Manual hooking GKI kernels without kprobes"
+	depends on KSU && KSU != m
+	default n
+	help
+	  If enabled, Hook required KernelSU syscalls with manually-patched function.
+	  If disabled, Hook required KernelSU syscalls with Kernel-probe.
 
 config KSU_ALLOWLIST_WORKAROUND
     bool "KernelSU Session Keyring Init workaround"
@@ -56,7 +41,7 @@ config KSU_CMDLINE
 
 config KPM
 	  bool "Enable SukiSU KPM"
-	  depends on KSU
+	  depends on KSU && 64BIT
 	  default n
 	  help
 	    Enabling this option will activate the KPM feature of SukiSU.

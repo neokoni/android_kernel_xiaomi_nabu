@@ -94,7 +94,7 @@ int __init ksu_kernelsu_init(void)
 
 	ksu_sucompat_init();
 
-#ifdef CONFIG_KSU_HOOK_KPROBES
+#ifdef CONFIG_KSU_KPROBES_HOOK
 	ksu_ksud_init();
 #else
 	pr_alert("KPROBES is disabled, KernelSU may not work, please check https://kernelsu.org/guide/how-to-integrate-for-non-gki.html");
@@ -121,7 +121,7 @@ void ksu_kernelsu_exit(void)
 
 	destroy_workqueue(ksu_workqueue);
 
-#ifdef CONFIG_KSU_HOOK_KPROBES
+#ifdef CONFIG_KSU_KPROBES_HOOK
 	ksu_ksud_exit();
 #endif
 	ksu_sucompat_exit();

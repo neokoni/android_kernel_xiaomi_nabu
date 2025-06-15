@@ -23,6 +23,9 @@
 
 #include <linux/fs.h>
 #include <linux/namei.h>
+#ifndef KSU_HAS_PATH_UMOUNT
+#include <linux/syscalls.h> // sys_umount
+#endif
 
 #ifdef MODULE
 #include <linux/list.h>
@@ -214,7 +217,6 @@ void ksu_escape_to_root(void)
 {
 	struct cred *cred;
 
-#ifdef KSU_GET_CRED_RCU
 	rcu_read_lock();
 
 	do {
@@ -227,14 +229,6 @@ void ksu_escape_to_root(void)
 		rcu_read_unlock();
 		return;
 	}
-#else
-	cred = (struct cred *)__task_cred(current);
-
-	if (cred->euid.val == 0) {
-		pr_warn("Already root, don't escape!\n");
-		return;
-	}
-#endif
 
 	struct root_profile *profile = ksu_get_root_profile(cred->uid.val);
 
@@ -263,16 +257,10 @@ void ksu_escape_to_root(void)
 	       sizeof(cred->cap_permitted));
 	memcpy(&cred->cap_bset, &profile->capabilities.effective,
 	       sizeof(cred->cap_bset));
-	// set ambient caps to all-zero
-	// fixes "operation not permitted" on dbus cap dropping
-	memset(&cred->cap_ambient, 0,
-			sizeof(cred->cap_ambient));
 
 	setup_groups(profile, cred);
 	
-#ifdef KSU_GET_CRED_RCU
 	rcu_read_unlock();
-#endif
 
 	// Refer to kernel/seccomp.c: seccomp_set_mode_strict
 	// When disabling Seccomp, ensure that current->sighand->siglock is held during the operation.
@@ -322,6 +310,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
 	return 0;
 }
 
+#ifdef CONFIG_EXT4_FS
 static void nuke_ext4_sysfs() {
 	struct path path;
 	int err = kern_path("/data/adb/modules", 0, &path);
@@ -341,6 +330,9 @@ static void nuke_ext4_sysfs() {
 	ext4_unregister_sysfs(sb);
  	path_put(&path);
 }
+#else
+static inline void nuke_ext4_sysfs() { }
+#endif
 
 int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 		     unsigned long arg4, unsigned long arg5)
@@ -525,6 +517,35 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 		return 0;
 	}
 #endif
+	if (arg2 == CMD_ENABLE_KPM) {
+    	bool KPM_Enabled = IS_ENABLED(CONFIG_KPM);
+    	if (copy_to_user((void __user *)arg3, &KPM_Enabled, sizeof(KPM_Enabled)))
+        	pr_info("KPM: copy_to_user() failed\n");
+    	return 0;
+	}
+
+	if (arg2 == CMD_HOOK_TYPE) {
+		const char *hook_type;
+		
+#ifdef CONFIG_KSU_MANUAL_HOOK
+		hook_type = "Manual";
+#elif defined(CONFIG_KSU_KPROBES_HOOK)
+		hook_type = "Kprobes";
+#else
+		hook_type = "Unknown";
+#endif
+		
+		size_t len = strlen(hook_type) + 1;
+		if (copy_to_user((void __user *)arg3, hook_type, len)) {
+			pr_err("hook_type: copy_to_user failed\n");
+			return 0;
+		}
+		
+		if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
+			pr_err("hook_type: prctl reply error\n");
+		}
+		return 0;
+	}
 
 #ifdef CONFIG_KSU_SUSFS
 	if (current_uid_val == 0) {
@@ -978,20 +999,36 @@ static bool should_umount(struct path *path)
 #endif
 }
 
-static int ksu_umount_mnt(struct path *path, int flags)
+#ifdef KSU_HAS_PATH_UMOUNT
+static void ksu_path_umount(const char *mnt, struct path *path, int flags)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_UMOUNT)
-	return path_umount(path, flags);
-#else
-	// TODO: umount for non GKI kernel
-	return -ENOSYS;
-#endif
+	int err = path_umount(path, flags);
+	pr_info("%s: path: %s ret: %d\n", __func__, mnt, err);
 }
+#else
+// TODO: Search a way to make this works without set_fs functions
+static void ksu_sys_umount(const char *mnt, int flags)
+{
+	char __user *usermnt = (char __user *)mnt;
+	mm_segment_t old_fs;
+	int ret; // although asmlinkage long
+	
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+	ret = ksys_umount(usermnt, flags);
+#else
+	ret = sys_umount(usermnt, flags); // cuz asmlinkage long sys##name
+#endif
+	set_fs(old_fs);
+	pr_info("%s: path: %s ret: %d \n", __func__, usermnt, ret);
+}
+#endif
 
 #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
 #else
-static void ksu_try_umount(const char *mnt, bool check_mnt, int flags)
+static void try_umount(const char *mnt, bool check_mnt, int flags)
 #endif
 {
 	struct path path;
@@ -1016,10 +1053,11 @@ static void ksu_try_umount(const char *mnt, bool check_mnt, int flags)
 	}
 #endif
 
-	err = ksu_umount_mnt(&path, flags);
-	if (err) {
-		pr_warn("umount %s failed: %d\n", mnt, err);
-	}
+#ifdef KSU_HAS_PATH_UMOUNT
+	ksu_path_umount(mnt, &path, flags);
+#else
+	ksu_sys_umount(mnt, flags);
+#endif
 }
 
 #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
@@ -1125,25 +1163,31 @@ out_ksu_try_umount:
 	// susfs come first, and lastly umount by ksu, make sure umount in reversed order
 	susfs_try_umount_all(new_uid.val);
 #else
-
 	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
 	// filter the mountpoint whose target is `/data/adb`
-	ksu_try_umount("/system", true, 0);
-	ksu_try_umount("/system_ext", true, 0);
-	ksu_try_umount("/vendor", true, 0);
-	ksu_try_umount("/product", true, 0);
-	ksu_try_umount("/data/adb/modules", false, MNT_DETACH);
-	ksu_try_umount("/data/adb/kpm", false, MNT_DETACH);
+	try_umount("/system", true, 0);
+	try_umount("/vendor", true, 0);
+	try_umount("/product", true, 0);
+	try_umount("/system_ext", true, 0);
+
+	// try umount modules path
+	try_umount("/data/adb/modules", false, MNT_DETACH);
+
+	// try umount kpm path
+	try_umount("/data/adb/kpm", false, MNT_DETACH);
 
 	// try umount ksu temp path
-	ksu_try_umount("/debug_ramdisk", false, MNT_DETACH);
+	try_umount("/debug_ramdisk", false, MNT_DETACH);
+	
+	// try umount ksu su path
+	try_umount("/sbin", false, MNT_DETACH);
 	
 	// try umount hosts file
-	ksu_try_umount("/system/etc/hosts", false, MNT_DETACH);
+	try_umount("/system/etc/hosts", false, MNT_DETACH);
 
 	// try umount lsposed dex2oat bins
-	ksu_try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
-	ksu_try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
+	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
+	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
 #endif
 	return 0;
 }
@@ -1447,7 +1491,7 @@ void __init ksu_core_init(void)
 
 void ksu_core_exit(void)
 {
-#ifdef CONFIG_KSU_HOOK_KPROBES
+#ifdef CONFIG_KSU_KPROBES_HOOK
 	pr_info("ksu_core_kprobe_exit\n");
 	// we dont use this now
 	// ksu_kprobe_exit();

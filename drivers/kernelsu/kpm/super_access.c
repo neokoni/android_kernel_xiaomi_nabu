@@ -71,7 +71,7 @@ struct DynamicStructInfo {
 #define KERNEL_VERSION_6_1 KERNEL_VERSION(6, 1, 0)
 #define KERNEL_VERSION_5_15 KERNEL_VERSION(5, 15, 0)
 #define KERNEL_VERSION_6_12 KERNEL_VERSION(6, 12, 0)
-#define KERNEL_VERSION_4_19 KERNEL_VERSION(4, 19, 0)
+#define KERNEL_VERSION_4_10 KERNEL_VERSION(4, 10, 0)
 
 #include <../fs/mount.h>
 #include <linux/mount.h>
@@ -171,7 +171,9 @@ DYNAMIC_STRUCT_BEGIN(task_struct)
     DEFINE_MEMBER(task_struct, group_leader)
     DEFINE_MEMBER(task_struct, mm)
     DEFINE_MEMBER(task_struct, active_mm)
-#if LINUX_VERSION_CODE > KERNEL_VERSION_4_19
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0) 
+    DEFINE_MEMBER(task_struct, pids[PIDTYPE_PID].pid)
+#else
     DEFINE_MEMBER(task_struct, thread_pid)
 #endif
     DEFINE_MEMBER(task_struct, files)
@@ -182,7 +184,7 @@ DYNAMIC_STRUCT_BEGIN(task_struct)
 #ifdef CONFIG_CGROUPS
     DEFINE_MEMBER(task_struct, cgroups)
 #endif
-#if LINUX_VERSION_CODE > KERNEL_VERSION_4_19
+#if LINUX_VERSION_CODE > KERNEL_VERSION_4_10
 #ifdef CONFIG_SECURITY
     DEFINE_MEMBER(task_struct, security)
 #endif

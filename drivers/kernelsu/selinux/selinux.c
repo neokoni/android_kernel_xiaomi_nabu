@@ -2,6 +2,9 @@
 #include "objsec.h"
 #include "linux/version.h"
 #include "../klog.h" // IWYU pragma: keep
+#ifdef SAMSUNG_SELINUX_PORTING
+#include "security.h" // Samsung SELinux Porting
+#endif
 #ifndef KSU_COMPAT_USE_SELINUX_STATE
 #include "avc.h"
 #endif
@@ -45,24 +48,41 @@ static int transive_to_domain(const char *domain)
 	return error;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
+bool __maybe_unused is_ksu_transition(const struct task_security_struct *old_tsec,
+			const struct task_security_struct *new_tsec)
+{
+	static u32 ksu_sid;
+	char *secdata;
+	u32 seclen;
+	bool allowed = false;
+
+	if (!ksu_sid)
+		security_secctx_to_secid("u:r:su:s0", strlen("u:r:su:s0"), &ksu_sid);
+
+	if (security_secid_to_secctx(old_tsec->sid, &secdata, &seclen))
+		return false;
+
+	allowed = (!strcmp("u:r:init:s0", secdata) && new_tsec->sid == ksu_sid);
+	security_release_secctx(secdata, seclen);
+	return allowed;
+}
+#endif
+
 void ksu_setup_selinux(const char *domain)
 {
 	if (transive_to_domain(domain)) {
 		pr_err("transive domain failed.\n");
 		return;
 	}
-
-	/* we didn't need this now, we have change selinux rules when boot!
-if (!is_domain_permissive) {
-  if (set_domain_permissive() == 0) {
-      is_domain_permissive = true;
-  }
-}*/
 }
 
 void ksu_setenforce(bool enforce)
 {
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+#ifdef SAMSUNG_SELINUX_PORTING
+	selinux_enforcing = enforce;
+#endif
 #ifdef KSU_COMPAT_USE_SELINUX_STATE
 	selinux_state.enforcing = enforce;
 #else
@@ -84,6 +104,9 @@ bool ksu_getenforce()
 #endif
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+#ifdef SAMSUNG_SELINUX_PORTING
+	return selinux_enforcing;
+#endif
 #ifdef KSU_COMPAT_USE_SELINUX_STATE
 	return selinux_state.enforcing;
 #else
