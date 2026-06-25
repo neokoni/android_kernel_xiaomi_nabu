@@ -176,8 +176,8 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
  * compiler aware of ordering is to put the two invocations of READ_ONCE,
  * WRITE_ONCE or ACCESS_ONCE() in different C statements.
  *
- * These two macros will also work on aggregate data types like structs or
- * unions.
+ * In contrast to ACCESS_ONCE these two macros will also work on aggregate
+ * data types like structs or unions.
  *
  * Their two major use cases are: (1) Mediating communication between
  * process-level code and irq/NMI handlers, all running on the same CPU,
