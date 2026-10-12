@@ -167,6 +167,7 @@ EXPORT_SYMBOL(vfs_statx_fd);
 
 #ifdef CONFIG_KSU
 extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
+extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
 #endif
 int vfs_statx(int dfd, const char __user *filename, int flags,
 	      struct kstat *stat, u32 request_mask)
@@ -381,8 +382,17 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
 	struct kstat stat;
 	int error = vfs_fstat(fd, &stat);
 
-	if (!error)
+	if (!error) {
+#ifdef CONFIG_KSU
+		/*
+		 * KernelSU: init 读取 init.rc 时会被内核追加 KSU 的 rc 片段，
+		 * 新版 Android 的 libbase 只按 fstat 返回的 st_size 读取，
+		 * 因此这里需要把 st_size 加上追加内容的长度。
+		 */
+		ksu_handle_vfs_fstat(fd, &stat.size);
+#endif
 		error = cp_new_stat(&stat, statbuf);
+	}
 
 	return error;
 }
